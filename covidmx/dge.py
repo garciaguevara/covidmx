@@ -8,6 +8,13 @@ from covidmx.utils import translate_serendipia
 from covidmx.dge_plot import DGEPlot
 pd.options.mode.chained_assignment = None
 
+import wget# import urllib
+import os
+import zipfile
+import shutil 
+
+
+
 URL_DATA = 'http://187.191.75.115/gobmx/salud/datos_abiertos/datos_abiertos_covid19.zip'
 URL_DESCRIPTION = 'http://187.191.75.115/gobmx/salud/datos_abiertos/diccionario_datos_covid19.zip'
 URL_HISTORICAL = 'http://187.191.75.115/gobmx/salud/datos_abiertos/historicos/datos_abiertos_covid19_{}.zip'
@@ -21,7 +28,8 @@ class DGE:
             return_catalogo=False,
             return_descripcion=False,
             date=None,
-            date_format='%d-%m-%Y'):
+            date_format='%d-%m-%Y',
+            data_path=None):
         """
         Returns COVID19 data from the Direccion General de Epidemiología
 
@@ -30,6 +38,7 @@ class DGE:
         self.clean = clean
         self.return_catalogo = return_catalogo
         self.return_descripcion = return_descripcion
+        self.data_path = data_path
 
 
         self.date = date
@@ -61,28 +70,39 @@ class DGE:
 
         return df
 
-    def get_encoded_data(self, url, encoding='UTF-8'):
+    def get_encoded_data(self, path, encoding='UTF-8'):
 
         try:
-            data = pd.read_csv(url, encoding=encoding)
+            data = pd.read_csv(path, encoding=encoding)
         except BaseException as e:
             if isinstance(e, UnicodeDecodeError):
                 encoding = 'ISO-8859-1'
-                data = self.get_encoded_data(url, encoding)
+                data = self.get_encoded_data(path, encoding)
             else:
                 raise RuntimeError('Cannot read the data.')
 
         return data
 
     def read_data(self, encoding='UTF-8'):
-
+#         data_file= os.path.join( data_path, os.path.split( url_data )[1].replace('.','-').replace('-zip','.zip') )
         if self.date is None:
             url_data = URL_DATA
+            data_file= os.path.join( self.data_path, os.path.split( url_data )[1] )
+            
+            if not os.path.exists(data_file):
+                wget.download(url_data, data_file)    
+                with ZipFile(data_file) as myzip:
+                    myzip.infolist()
+                df_filename=myzip.infolist()[0].filename.split('.')[0]; myzip.close()
+                shutil.copyfile( data_file, data_file.replace('.zip',df_filename+'.zip') )
+            
+            data_path=data_file
+            
         else:
             date_f = self.date.strftime('%d.%m.%Y')
-            url_data = URL_HISTORICAL.format(date_f)
+            data_path = URL_HISTORICAL.format(date_f)
 
-        data = self.get_encoded_data(url_data)
+        data = self.get_encoded_data(data_path)
 
         try:
             r_url = requests.get(URL_DESCRIPTION, stream=True)

@@ -45,7 +45,8 @@ class DGEPlot:
         df = pd.concat([df, pd.get_dummies(df['resultado'])], axis=1)
 
         int_vars = list(replace_resultado.values()) + ['muertos']
-        df[int_vars] = df[int_vars].astype(int)
+        df[int_vars] = df[int_vars].astype(int) #19764 09-07 
+        #confL=df['resultado']=='confirmados'; df[confL]['muertos'].sum()
 
         return df
 
