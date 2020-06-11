@@ -6,6 +6,7 @@ from itertools import product
 from unidecode import unidecode
 from covidmx.utils import translate_serendipia
 from covidmx.dge_plot import DGEPlot
+import pickle
 
 from covidmx.dge_multipliers import DGEMultipliers
 
@@ -51,13 +52,18 @@ class DGE:
 
     def get_data(self, preserve_original=None):
 
+        clean_data_file= os.path.join( self.data_path, os.path.split( URL_DATA )[1] ).replace("zip", "pkl")            
+
         print('Reading data from Direccion General de Epidemiologia...')
         df, catalogo, descripcion = self.read_data()
         print('Data readed')
 
-        if self.clean: #TODO: save clean data
+        if self.clean and not os.path.exists(clean_data_file): #TODO: save clean data
             print('Cleaning data')
-            df = self.clean_data(df, catalogo, descripcion, preserve_original)
+            df = self.clean_data(df, catalogo, descripcion, preserve_original)              
+            print("Save cleaned database "+clean_data_file)
+            with open(clean_data_file, 'wb') as clean_data_pkl: #save selected hypothesis
+                pickle.dump(df, clean_data_pkl) 
 
         print('Ready!')
 
@@ -74,15 +80,20 @@ class DGE:
         return df
 
     def get_encoded_data(self, path, encoding='UTF-8'):
-
-        try:
-            data = pd.read_csv(path, encoding=encoding)
-        except BaseException as e:
-            if isinstance(e, UnicodeDecodeError):
-                encoding = 'ISO-8859-1'
-                data = self.get_encoded_data(path, encoding)
-            else:
-                raise RuntimeError('Cannot read the data.')
+        clean_data_file= os.path.join( self.data_path, os.path.split( URL_DATA )[1] ).replace("zip", "pkl")            
+        if os.path.exists(clean_data_file) and self.clean:
+            print ("Open cleaned "+clean_data_file)
+            with open(clean_data_file, 'rb') as clean_data_pkl:
+                data = pickle.load(clean_data_pkl)
+        else:
+            try:
+                data = pd.read_csv(path, encoding=encoding)
+            except BaseException as e:
+                if isinstance(e, UnicodeDecodeError):
+                    encoding = 'ISO-8859-1'
+                    data = self.get_encoded_data(path, encoding)
+                else:
+                    raise RuntimeError('Cannot read the data.')
 
         return data
 
@@ -90,8 +101,7 @@ class DGE:
 #         data_file= os.path.join( data_path, os.path.split( url_data )[1].replace('.','-').replace('-zip','.zip') )
         if self.date is None:
             url_data = URL_DATA
-            data_file= os.path.join( self.data_path, os.path.split( url_data )[1] )
-            
+            data_file= os.path.join( self.data_path, os.path.split( url_data )[1] )            
             if not os.path.exists(data_file):
                 wget.download(url_data, data_file)    
                 with ZipFile(data_file) as myzip:
