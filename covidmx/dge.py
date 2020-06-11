@@ -6,6 +6,9 @@ from itertools import product
 from unidecode import unidecode
 from covidmx.utils import translate_serendipia
 from covidmx.dge_plot import DGEPlot
+
+from covidmx.dge_multipliers import DGEMultipliers
+
 pd.options.mode.chained_assignment = None
 
 import wget# import urllib
@@ -52,7 +55,7 @@ class DGE:
         df, catalogo, descripcion = self.read_data()
         print('Data readed')
 
-        if self.clean:
+        if self.clean: #TODO: save clean data
             print('Cleaning data')
             df = self.clean_data(df, catalogo, descripcion, preserve_original)
 
@@ -240,6 +243,18 @@ class DGE:
         dge_data, catalogue, description = self.get_data(preserve_original=['MUNICIPIO_RES', 'ENTIDAD_RES'])
 
         dge_plot = DGEPlot(dge_data, catalogue, description)
+        dge_plot.date = self.date
+
+        return dge_plot
+    
+    def get_multipliers(self):
+        self.return_catalogo = True
+        self.return_descripcion = True
+        self.clean = True
+
+        dge_data, catalogue, description = self.get_data(preserve_original=['MUNICIPIO_RES', 'ENTIDAD_RES'])
+
+        dge_plot = DGEMultipliers(dge_data, catalogue, description)
         dge_plot.date = self.date
 
         return dge_plot

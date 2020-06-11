@@ -1,10 +1,11 @@
 from mapsmx import MapsMX
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 
-class DGEPlot:
+class DGEMultipliers:
     """
-    Class to plot dge information
+    Class to plot weekly multipliers dge information
     """
 
     def __init__(self, dge_data, catalogue, description):
@@ -34,7 +35,7 @@ class DGEPlot:
                        'entidad_res_original': 'cve_ent',
                        'municipio_res_original': 'cve_mun'
                        })
-
+        metric="muertos"
         df['muertos'] = df['fecha_def'].notna().astype(int)
 
         replace_resultado = {'Positivo SARS-CoV-2': 'confirmados',
@@ -46,7 +47,53 @@ class DGEPlot:
 
         int_vars = list(replace_resultado.values()) + ['muertos']
         df[int_vars] = df[int_vars].astype(int) #19764 09-07 
-        #confL=df['resultado']=='confirmados'; df[confL]['muertos'].sum()
+        confirmados_df=df[ df['resultado']=='confirmados' ]; 
+        
+        muertos_df = confirmados_df[confirmados_df['muertos']==1]#confirmados_df['muertos'].sum()
+        dias_muertes=np.sort( muertos_df['fecha_def'].unique() )
+        muertos_por_dia=[]; num_muertos_dia=[]; metricPerFile=[]
+        date_format='%m-%d'; title="Muertes multipliers"
+        for day in pd.date_range(dias_muertes[0],dias_muertes[-8]): #TODO: compute 7 days avg; get data/numbers from -/+3 days 
+            muertos_por_dia.append(   muertos_df[ muertos_df['fecha_def']==day.date().__str__() ] )
+            num_muertos_dia.append( len(muertos_por_dia[-1]) )
+            metricPerFile.append( '{}/{}'.format(day.date().day,day.date().month) )
+            
+        xAxis=[x for x in range(len(metricPerFile))]
+        fig = plt.figure(figsize=(20.0, 5.0));ax = fig.add_subplot(111);
+        _=plt.xticks(xAxis, metricPerFile , rotation='vertical');plt.grid();#plt.show()#[x[0][8:13] for x in metricPerFile]
+        ax.set_yscale('log'); ax.yaxis.grid(b=True, which='minor', linestyle='--')
+        ax.plot(xAxis,num_muertos_dia,'o-', label="{} por dia".format(metric) );
+        ax.set_ylabel(r"{} number".format(metric)); ax.legend(fontsize="small", loc=6)
+        
+#         fig.suptitle("{}\n {}".format(title, metricRangeStr) )
+#         fig.savefig(os.path.join(mobiVisuRes,title.replace(' ', '_')+".png"), bbox_inches='tight')    
+        
+        
+        muertos_week=[]; metricPerFileWk=[]; muertos_week_mult=[0];
+        for wk in range( int(len(num_muertos_dia)/7) ):           #TODO: verify metric in FT.com
+            muertos_week.append( np.sum( num_muertos_dia[wk*7:wk*7+7] ) ); num_muertos_dia[wk*7:wk*7+7];wk*7;wk*7+7
+            metricPerFileWk.append( metricPerFile[wk*7+3] )
+            if wk>0:                
+                muertos_week_mult.append(muertos_week[-1]/muertos_week[-2])
+        
+        bad_mults=np.bitwise_or(np.isnan(muertos_week_mult), np.isinf(muertos_week_mult))
+        mults=np.array(muertos_week_mult)
+        mults[bad_mults]=0.0
+        
+        xAxis=[x for x in range(len(metricPerFileWk))]
+        fig = plt.figure(figsize=(11.0, 5.0));ax = fig.add_subplot(111);
+        _=plt.xticks(xAxis, metricPerFileWk , rotation='vertical');plt.grid();#plt.show()#[x[0][8:13] for x in metricPerFileWk]
+        ax.yaxis.grid(b=True, which='minor', linestyle='--'); #ax.set_yscale('log'); 
+        ax.plot(xAxis,muertos_week,'o-', label="{} por dia".format(metric) );
+        ax.set_ylabel(r"{} number".format(metric)); ax.legend(fontsize="small", loc=6)
+        
+        ax2 = ax.twinx(); ax2.plot(xAxis,mults.tolist(),'r^-', label="Multipliers")
+        ax.set_ylabel(r"{} multiplier".format(metric)); ax.legend(fontsize="small", loc=6)
+        ax2.set_ylabel(r"Number of trajectories"); ax2.legend(fontsize="small", loc=5);plt.grid();plt.show()
+        
+        
+        fig.suptitle("{}\n {}".format(title, metricRangeStr) )
+        fig.savefig(os.path.join(mobiVisuRes,title.replace(' ', '_')+".png"), bbox_inches='tight')
 
         return df
 
@@ -68,7 +115,6 @@ class DGEPlot:
             Wheter add municipalities to plot
         """
 
-        #TODO: review if muertos plot is confirmados
         assert status in self.available_status, 'Please provide some of the following status: {}'.format(', '.join(self.available_status))
         if state is not None:
             assert state in self.available_states, 'Please provide some of the following states: {}'.format(', '.join(self.available_states))
