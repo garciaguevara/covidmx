@@ -38,17 +38,20 @@ class DGE:
         Returns COVID19 data from the Direccion General de Epidemiología
 
         """
-
         self.clean = clean
         self.return_catalogo = return_catalogo
         self.return_descripcion = return_descripcion
         self.data_path = data_path
 
-
         self.date = date
         if date is not None:
             self.date = pd.to_datetime(date, format=date_format)
             assert self.date >= pd.to_datetime('2020-04-12'), 'Historical data only available as of 2020-04-12'
+
+        self.stringency_dates= { 
+            "susana": pd.to_datetime('2020-03-23'), #MONDAY
+            "nueva_norm":pd.to_datetime('2020-06-01') #MONDAY
+            }
 
     def get_data(self, preserve_original=None):
 
@@ -264,7 +267,8 @@ class DGE:
 
         dge_data, catalogue, description = self.get_data(preserve_original=['MUNICIPIO_RES', 'ENTIDAD_RES'])
 
-        dge_plot = DGEMultipliers(dge_data, catalogue, description)
-        dge_plot.date = self.date
+        dge_multi = DGEMultipliers(dge_data, catalogue, description)
+        dge_multi.date = self.date
+        dge_multi.stringency_dates = self.stringency_dates
 
-        return dge_plot
+        return dge_multi

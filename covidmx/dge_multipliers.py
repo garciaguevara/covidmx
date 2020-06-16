@@ -2,6 +2,7 @@ from mapsmx import MapsMX
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+from operator import add
 
 class DGEMultipliers:
     """
@@ -31,30 +32,164 @@ class DGEMultipliers:
 
 
 
+    def plotStringencyDates(self, weekly=True):
+        susy=self.stringency_dates["susana"]-self.dias_confirmados[self.discardFirstDays]
+        nueva_norm=self.stringency_dates["nueva_norm"]-self.dias_confirmados[self.discardFirstDays]        
+        
+        if weekly:
+            plt.axvline(x=susy.days/7,  linewidth=4, c=(1.0, 0, 0,0.5))
+            plt.axvline(x=nueva_norm.days/7,  linewidth=4, c=(1, 0.65, 0,0.5))
+        else:
+            plt.axvline(x=susy.days,  linewidth=4, c=(1.0, 0, 0,0.5))
+            plt.axvline(x=nueva_norm.days,  linewidth=4, c=(1, 0.65, 0,0.5))    
+        return susy, nueva_norm
 
-
-    def plotHistoricDaily(self, fig, num_per_day, metric, historic_days, plot_position ):        
+    def plotHistoricDaily(self, fig, per_day, metric, historic_days, plot_position, line_color='bo-', log_scale=True ):        
         xAxis=[x for x in range(len(historic_days))]
         ax = fig.add_subplot(plot_position);
-        _=plt.xticks(xAxis, historic_days , rotation='vertical');plt.grid();#plt.show()#[x[0][8:13] for x in historic_days]
-        ax.set_yscale('log'); ax.yaxis.grid(b=True, which='minor', linestyle='--')
-        ax.plot(xAxis,num_per_day,'o-', label="{} por dìa".format(metric) );
+        _=plt.xticks(xAxis, historic_days , rotation='vertical');ax.grid('on')#plt.grid();#plt.show()#[x[0][8:13] for x in historic_days]
+        if log_scale: ax.set_yscale('log'); 
+        ax.yaxis.grid(b=True, which='both', linestyle='--')
+        ax.plot(xAxis,per_day, line_color, label="{} por dìa".format(metric) );
         ax.set_ylabel(r"{} nùmero".format(metric)); ax.legend(fontsize="small", loc=6)
         
-        
+        susy, _= self.plotStringencyDates( weekly=False)
+        for ith_monday in range((susy.days)%7,len(xAxis),7):
+            plt.axvline(x=ith_monday, linewidth=1,linestyle='dashed')
+        uncertain_days=9-self.discardLatestDays
+        if uncertain_days>0:
+            plt.axvline(x=len(historic_days)-uncertain_days,  linewidth=4, c=(1.0, 0, 0,0.5), linestyle='dashed')
+            
     def plotHistoricWeekly(self, fig, muertos_week, multipliers, metric, historic_week, plot_position ):
         ax = fig.add_subplot(220+plot_position); xAxis=[x for x in range(len(historic_week))]
         _=plt.xticks(xAxis, historic_week , rotation='vertical');plt.grid();#plt.show()#[x[0][8:13] for x in historic_week]
         ax.yaxis.grid(b=True, which='minor', linestyle='--'); #ax.set_yscale('log'); 
         ax.plot(xAxis,muertos_week,'o-', label="{} per week".format(metric) );
         ax.set_ylabel(r"{} number".format(metric)); ax.legend(fontsize="small", loc=6)
+        self.plotStringencyDates()
         
         ax2 = fig.add_subplot(222+plot_position);#ax2 = ax.twinx(); 
         _=plt.xticks(xAxis, historic_week , rotation='vertical');
         ax2.plot(xAxis,multipliers,'r^-', label="Multipliers")
-        ax2.yaxis.grid(b=True, which='minor', linestyle='--'); ax2.set_ylim((0,4.0))# plt.ylim(4.0)
+        ax2.yaxis.grid(b=True, which='minor', linestyle='--'); ax2.set_ylim((0,2.0))# plt.ylim(4.0)
         ax2.set_ylabel(r"{} multiplier".format(metric)); ax2.legend(fontsize="small", loc=5);plt.grid();plt.show()
+        
+        susy=self.stringency_dates["susana"]-self.dias_confirmados[self.discardFirstDays]
+        nueva_norm=self.stringency_dates["nueva_norm"]-self.dias_confirmados[self.discardFirstDays]    
+        self.plotStringencyDates()
 
+
+    def casosPorDia(self, muertos_df, confirmados_df, day, num_muertos_dia, num_confirmados_dia, num_confirmados_dia_ingreso):
+        muertos_por_dia = muertos_df[ muertos_df['fecha_def']==day.date().__str__() ] #.append(
+        num_muertos_dia.append( len(muertos_por_dia) ) #[-1]            
+        confirmados_por_dia = confirmados_df[ confirmados_df['fecha_sintomas']==day.date().__str__() ] #.append(
+        num_confirmados_dia.append( len(confirmados_por_dia) ) #[-1]            
+        confirmados_dia_ingreso = confirmados_df[ confirmados_df['fecha_ingreso']==day.date().__str__() ] #.append(
+        num_confirmados_dia_ingreso.append( len(confirmados_dia_ingreso) ) #[-1]
+        return num_muertos_dia, num_confirmados_dia, num_confirmados_dia_ingreso
+
+    def plotHistoric(self, state=None):
+        if state is not None: 
+            plot_data = self.dge_data[self.dge_data['entidad_res'].str.lower() == state.lower()]
+        else:
+            plot_data = self.dge_data
+            
+        metric="muertos"; metricConfirmados="casos"
+        confirmados_df=plot_data[ plot_data['resultado']=='confirmados' ];         
+        muertos_df = confirmados_df[confirmados_df['muertos']==1]#confirmados_df['muertos'].sum()        
+        self.dias_confirmados=np.sort( confirmados_df['fecha_sintomas'].unique() );#dias_muertes=np.sort( muertos_df['fecha_def'].unique() )  
+        # np.sort( confirmados_df['fecha_ingreso'].unique() )                  
+        
+        sospechosos_df=plot_data[ plot_data['resultado']=='sospechosos' ]
+        muertos_sospechosos_df = sospechosos_df[sospechosos_df['muertos']==1]#confirmados_df['muertos'].sum()        
+        self.dias_sospechosos=np.sort( sospechosos_df['fecha_sintomas'].unique() );
+        
+        self.discardLatestDays=0;self.discardFirstDays=0
+        
+        confirmados_dia=[]; muertos_dia=[]; confirmados_dia_ingreso=[]; historic_days=[]; #muertos_por_dia=[];  
+        confirmados_d_s=[]; muertos_d_s=[]; confirmados_d_s_ingreso=[]
+        upper_bound= len(self.dias_confirmados)-1-self.discardLatestDays#TODO: compute 7 days avg; get data/numbers from -/+3 days # date_format='%m-%d'; 
+        for day in pd.date_range(self.dias_confirmados[self.discardFirstDays],self.dias_confirmados[upper_bound]): #dias_muertes  
+            muertos_dia, confirmados_dia, confirmados_dia_ingreso=self.casosPorDia(muertos_df, confirmados_df, day, muertos_dia, confirmados_dia, confirmados_dia_ingreso)
+            muertos_d_s, confirmados_d_s, confirmados_d_s_ingreso=self.casosPorDia(muertos_sospechosos_df, sospechosos_df, day, muertos_d_s, confirmados_d_s, confirmados_d_s_ingreso)
+            
+            historic_days.append( '{}/{}'.format(day.date().day,day.date().month) )
+        
+        
+        
+        
+        
+        fig = plt.figure(figsize=(20.0, 15.0));title="Muertes y casos (fecha de sìntomas/ingreso) daily historic"  
+        self.plotHistoricDaily(fig, muertos_dia, metric, historic_days, 311 )
+        self.plotHistoricDaily(fig, confirmados_dia, metricConfirmados, historic_days, 312 )
+        self.plotHistoricDaily(fig, confirmados_dia_ingreso, metricConfirmados+" ingreso", historic_days, 313 ) #TODO: verify symptoms start
+        fig.suptitle("{}\n {}".format(title, state) )
+#         fig.savefig(os.path.join(mobiVisuRes,title.replace(' ', '_')+".png"), bbox_inches='tight')            
+        
+        fig = plt.figure(figsize=(20.0, 15.0));title="Muertes y casos (confirmados+sospechosos fecha de sìntomas/ingreso) daily historic"  
+        self.plotHistoricDaily(fig, list( map(add, muertos_dia, muertos_d_s) ), metric, historic_days, 311 )
+        self.plotHistoricDaily(fig, muertos_d_s, metric, historic_days, 311, line_color='ro-')
+        
+        self.plotHistoricDaily(fig, list( map(add, confirmados_dia, confirmados_d_s) ), metricConfirmados, historic_days, 312 )
+        self.plotHistoricDaily(fig, confirmados_d_s, metricConfirmados, historic_days, 312, line_color='ro-' )
+        
+        self.plotHistoricDaily(fig, list( map(add, confirmados_dia_ingreso, confirmados_d_s_ingreso) ), metricConfirmados+" ingreso", historic_days, 313 ) #TODO: verify symptoms start
+        self.plotHistoricDaily(fig, confirmados_d_s_ingreso, metricConfirmados+" ingreso", historic_days, 313, line_color='ro-' )
+        
+        fig.suptitle("{}\n {}".format(title, state) )
+#         fig.savefig(os.path.join(mobiVisuRes,title.replace(' ', '_')+".png"), bbox_inches='tight')
+        
+        
+        
+        
+        self.discardFirstDays=20
+        confirmados_dia=[]; muertos_dia=[]; confirmados_dia_ingreso=[]; historic_days=[]; confirmados_d_s=[]; muertos_d_s=[]; confirmados_d_s_ingreso=[]
+        upper_bound= len(self.dias_confirmados)-1-self.discardLatestDays#TODO: compute 7 days avg; get data/numbers from -/+3 days # date_format='%m-%d'; 
+        for day in pd.date_range(self.dias_confirmados[self.discardFirstDays],self.dias_confirmados[upper_bound]): #dias_muertes  
+            muertos_dia, confirmados_dia, confirmados_dia_ingreso=self.casosPorDia(muertos_df, confirmados_df, day, muertos_dia, confirmados_dia, confirmados_dia_ingreso)
+            muertos_d_s, confirmados_d_s, confirmados_d_s_ingreso=self.casosPorDia(muertos_sospechosos_df, sospechosos_df, day, muertos_d_s, confirmados_d_s, confirmados_d_s_ingreso)
+            historic_days.append( '{}/{}'.format(day.date().day,day.date().month) )
+        
+        fig = plt.figure(figsize=(20.0, 15.0));title="Muertes (confirmados+sospechosos fecha de sìntomas/ingreso) daily historic"  
+        self.plotHistoricDaily(fig, muertos_dia, metric, historic_days, 111, log_scale=False )
+        self.plotHistoricDaily(fig, list( map(add, muertos_dia, muertos_d_s) ), metric, historic_days, 111, line_color='ro-', log_scale=False)
+        fig.suptitle("{}\n {}".format(title, state) )
+        
+        fig = plt.figure(figsize=(20.0, 15.0));title="Casos (confirmados+sospechosos fecha de sìntomas/ingreso) daily historic"  
+        self.plotHistoricDaily(fig, confirmados_dia, metricConfirmados, historic_days, 111, log_scale=False )
+        self.plotHistoricDaily(fig, list( map(add, confirmados_dia, confirmados_d_s) ), metricConfirmados, historic_days, 111, line_color='ro-', log_scale=False)
+        
+#         self.plotHistoricDaily(fig, list( map(add, confirmados_dia_ingreso, confirmados_d_s_ingreso) ), metricConfirmados+" ingreso", historic_days, 313 ) #TODO: verify symptoms start
+#         self.plotHistoricDaily(fig, confirmados_d_s_ingreso, metricConfirmados+" ingreso", historic_days, 313, line_color='ro-' )
+        
+        fig.suptitle("{}\n {}".format(title, state) )
+        
+        
+        
+        historic_week=[]; muertos_week=[];  muertos_week_mult=[0]; confirmados_week=[];  confirmados_week_mult=[0];
+        for wk in range( int(len(muertos_dia)/7) ):           #TODO: verify metric in FT.com
+            muertos_week.append( np.sum( muertos_dia[wk*7:wk*7+7] ) ); #muertos_dia[wk*7:wk*7+7];wk*7;wk*7+7
+            confirmados_week.append( np.sum( confirmados_dia[wk*7:wk*7+7] ) ); 
+            historic_week.append( historic_days[wk*7] )
+            if wk>0:                
+                muertos_week_mult.append(muertos_week[-1]/muertos_week[-2])
+                confirmados_week_mult.append(confirmados_week[-1]/confirmados_week[-2])
+        
+        bad_mults=np.bitwise_or(np.isnan(muertos_week_mult), np.isinf(muertos_week_mult))
+        muertos_week_mult=np.array(muertos_week_mult); muertos_week_mult[bad_mults]=0.0
+        
+        bad_mults=np.bitwise_or(np.isnan(confirmados_week_mult), np.isinf(confirmados_week_mult))
+        confirmados_week_mult=np.array(confirmados_week_mult); confirmados_week_mult[bad_mults]=0.0        
+
+        fig = plt.figure(figsize=(10.0, 10.0));        
+        
+        self.plotHistoricWeekly( fig, muertos_week, muertos_week_mult.tolist(), metric, historic_week, 1 )
+        self.plotHistoricWeekly( fig, confirmados_week, confirmados_week_mult.tolist(), metricConfirmados, historic_week, 2 )
+        
+#         fig.suptitle("{}\n {}".format(title, metricRangeStr) )
+#         fig.savefig(os.path.join(mobiVisuRes,title.replace(' ', '_')+".png"), bbox_inches='tight')
+        
+        
 
     def prepare_data(self, df):
 
@@ -62,7 +197,7 @@ class DGEMultipliers:
                        'entidad_res_original': 'cve_ent',
                        'municipio_res_original': 'cve_mun'
                        })
-        metric="muertos"; metricConfirmados="confirmados"
+        
         df['muertos'] = df['fecha_def'].notna().astype(int)
 
         replace_resultado = {'Positivo SARS-CoV-2': 'confirmados',
@@ -74,55 +209,8 @@ class DGEMultipliers:
 
         int_vars = list(replace_resultado.values()) + ['muertos']
         df[int_vars] = df[int_vars].astype(int) #19764 09-07 
-        confirmados_df=df[ df['resultado']=='confirmados' ];         
-        muertos_df = confirmados_df[confirmados_df['muertos']==1]#confirmados_df['muertos'].sum()        
-        dias_confirmados=np.sort( confirmados_df['fecha_sintomas'].unique() );#dias_muertes=np.sort( muertos_df['fecha_def'].unique() )  
-        # np.sort( confirmados_df['fecha_ingreso'].unique() )                  
         
-        num_confirmados_dia=[]; num_muertos_dia=[]; historic_days=[]; discardLatestDays=9; num_confirmados_por_dia_ingreso=[] #muertos_por_dia=[];  
-        date_format='%m-%d';  #TODO: compute 7 days avg; get data/numbers from -/+3 days
-        for day in pd.date_range(dias_confirmados[0],dias_confirmados[-discardLatestDays]): #dias_muertes  
-            muertos_por_dia = muertos_df[ muertos_df['fecha_def']==day.date().__str__() ] #.append(
-            num_muertos_dia.append( len(muertos_por_dia) ) #[-1]            
-            confirmados_por_dia = confirmados_df[ confirmados_df['fecha_sintomas']==day.date().__str__() ] #.append(
-            num_confirmados_dia.append( len(confirmados_por_dia) ) #[-1]            
-            confirmados_por_dia_ingreso = confirmados_df[ confirmados_df['fecha_ingreso']==day.date().__str__() ] #.append(
-            num_confirmados_por_dia_ingreso.append( len(confirmados_por_dia_ingreso) ) #[-1]
-            historic_days.append( '{}/{}'.format(day.date().day,day.date().month) )
-        
-        fig = plt.figure(figsize=(20.0, 15.0));title="Muertes y confirmados daily historic"  
-        self.plotHistoricDaily(fig, num_muertos_dia, metric, historic_days, 311 )
-        self.plotHistoricDaily(fig, num_confirmados_dia, metricConfirmados, historic_days, 312 )
-        self.plotHistoricDaily(fig, num_confirmados_por_dia_ingreso, metricConfirmados+" ingreso", historic_days, 313 ) #TODO: verify symptoms start
-#         fig.suptitle("{}\n {}".format(title, metricRangeStr) )
-#         fig.savefig(os.path.join(mobiVisuRes,title.replace(' ', '_')+".png"), bbox_inches='tight')            
-        
-        historic_week=[]; muertos_week=[];  muertos_week_mult=[0]; confirmados_week=[];  confirmados_week_mult=[0];
-        for wk in range( int(len(num_muertos_dia)/7) ):           #TODO: verify metric in FT.com
-            muertos_week.append( np.sum( num_muertos_dia[wk*7:wk*7+7] ) ); #num_muertos_dia[wk*7:wk*7+7];wk*7;wk*7+7
-            confirmados_week.append( np.sum( num_confirmados_dia[wk*7:wk*7+7] ) ); 
-            historic_week.append( historic_days[wk*7+3] )
-            if wk>0:                
-                muertos_week_mult.append(muertos_week[-1]/muertos_week[-2])
-                confirmados_week_mult.append(confirmados_week[-1]/confirmados_week[-2])
-        
-        bad_mults=np.bitwise_or(np.isnan(muertos_week_mult), np.isinf(muertos_week_mult))
-        muertos_week_mult=np.array(muertos_week_mult); muertos_week_mult[bad_mults]=0.0
-        
-        bad_mults=np.bitwise_or(np.isnan(confirmados_week_mult), np.isinf(confirmados_week_mult))
-        confirmados_week_mult=np.array(confirmados_week_mult); confirmados_week_mult[bad_mults]=0.0
-        
-
-        fig = plt.figure(figsize=(10.0, 10.0));
-        
-        
-        self.plotHistoricWeekly( fig, muertos_week, muertos_week_mult.tolist(), metric, historic_week, 1 )
-        self.plotHistoricWeekly( fig, confirmados_week, confirmados_week_mult.tolist(), metricConfirmados, historic_week, 2 )
-        
-        
-        
-        fig.suptitle("{}\n {}".format(title, metricRangeStr) )
-        fig.savefig(os.path.join(mobiVisuRes,title.replace(' ', '_')+".png"), bbox_inches='tight')
+#         self.plotHistoric(df)
 
         return df
 
@@ -228,6 +316,9 @@ class DGEMultipliers:
             plt.close()
         else:
             plt.show()
+
+
+
 
 
         return plot_obj
