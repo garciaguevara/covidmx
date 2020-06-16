@@ -62,19 +62,23 @@ class DGEMultipliers:
         if uncertain_days>0:
             plt.axvline(x=len(historic_days)-uncertain_days,  linewidth=4, c=(1.0, 0, 0,0.5), linestyle='dashed')
             
-    def plotHistoricWeekly(self, fig, muertos_week, multipliers, metric, historic_week, plot_position ):
+    def plotHistoricWeekly(self, fig, muertos_week, multipliers, muertos_week_suspect, muertos_mult_suspect, metric, historic_week, plot_position ):
         ax = fig.add_subplot(220+plot_position); xAxis=[x for x in range(len(historic_week))]
         _=plt.xticks(xAxis, historic_week , rotation='vertical');ax.grid('on');#plt.show()#[x[0][8:13] for x in historic_week]
         ax.yaxis.grid(b=True, which='minor', linestyle='--'); #ax.set_yscale('log'); 
         ax.plot(xAxis,muertos_week,'o-', label="{} per week".format(metric) );
-        ax.set_ylabel(r"{} number".format(metric)); ax.legend(fontsize="small", loc=6)
+        
+        ax.plot(xAxis,muertos_week_suspect,'ro-', label="{} + sospechosos per week".format(metric) );
+        
+        ax.set_ylabel(r"{} number".format(metric)); ax.legend(fontsize="small")#, loc=6
         self.plotStringencyDates()
         
         ax2 = fig.add_subplot(222+plot_position);#ax2 = ax.twinx(); 
         _=plt.xticks(xAxis, historic_week , rotation='vertical');ax2.grid('on');
-        ax2.plot(xAxis,multipliers,'o^-', label="Multipliers")
+        ax2.plot(xAxis,multipliers,'^-', label="Multipliers")
+        ax2.plot(xAxis,muertos_mult_suspect,'r^-', label="Multipliers + sospechosos")
         ax2.yaxis.grid(b=True, which='minor', linestyle='--'); ax2.set_ylim((0,2.0))# plt.ylim(4.0)
-        ax2.set_ylabel(r"{} multiplier".format(metric)); ax2.legend(fontsize="small", loc=5);ax.grid('on')
+        ax2.set_ylabel(r"{} multiplier".format(metric)); ax2.legend(fontsize="small");ax.grid('on') #, loc=5
         
 #         susy=self.stringency_dates["susana"]-self.dias_confirmados[self.discardFirstDays]
 #         nueva_norm=self.stringency_dates["nueva_norm"]-self.dias_confirmados[self.discardFirstDays]    
@@ -102,6 +106,7 @@ class DGEMultipliers:
             plot_data = self.dge_data[self.dge_data['entidad_res'].str.lower() == state.lower()]
         else:
             plot_data = self.dge_data
+            state="Nacional"
             
         metric="muertos"; metricCasos="casos"
         casos_df=plot_data[ plot_data['resultado']=='confirmados' ];         
@@ -141,15 +146,17 @@ class DGEMultipliers:
 #             muertos_dia, casos_dia, casos_dia_ingreso=utM.casosPorDia(muertos_df, casos_df, day, muertos_dia, casos_dia, casos_dia_ingreso)
 #             muertos_d_s, casos_d_s, casos_d_s_ingreso=utM.casosPorDia(muertos_sospechosos_df, sospechosos_df, day, muertos_d_s, casos_d_s, casos_d_s_ingreso)
 #             historic_days.append( '{}/{}'.format(day.date().day,day.date().month) )
-
+        
+        muertos_plus_suspect = list( map(add, muertos_dia, muertos_d_s) )
         title="Muertes (confirmados+sospechosos fecha de sìntomas/ingreso) daily historic"; fig = plt.figure(figsize=(20.0, 15.0));  
         self.plotHistoricDaily(fig, muertos_dia, metric, historic_days, 111, log_scale=False )
-        self.plotHistoricDaily(fig, list( map(add, muertos_dia, muertos_d_s) ), metric, historic_days, 111, line_color='ro-', log_scale=False)
+        self.plotHistoricDaily(fig, muertos_plus_suspect, metric, historic_days, 111, line_color='ro-', log_scale=False)
         fig.suptitle("{}\n {}".format(title, state) )
         
+        casos_plus_suspect=list( map(add, casos_dia, casos_d_s) )
         title="Casos (confirmados+sospechosos fecha de sìntomas/ingreso) daily historic"; fig = plt.figure(figsize=(20.0, 15.0));  
         self.plotHistoricDaily(fig, casos_dia, metricCasos, historic_days, 111, log_scale=False )
-        self.plotHistoricDaily(fig, list( map(add, casos_dia, casos_d_s) ), metricCasos, historic_days, 111, line_color='ro-', log_scale=False)        
+        self.plotHistoricDaily(fig, casos_plus_suspect, metricCasos, historic_days, 111, line_color='ro-', log_scale=False)        
 #         self.plotHistoricDaily(fig, list( map(add, casos_dia_ingreso, casos_d_s_ingreso) ), metricCasos+" ingreso", historic_days, 313 ) #TODO: verify symptoms start
 #         self.plotHistoricDaily(fig, casos_d_s_ingreso, metricCasos+" ingreso", historic_days, 313, line_color='ro-' )
         fig.suptitle("{}\n {}".format(title, state) )
@@ -160,16 +167,29 @@ class DGEMultipliers:
         for wk in range( int((len(muertos_dia) )/7) ):           #TODO: verify metric in FT.com
             muertos_week.append( np.sum( muertos_dia[wk*7:wk*7+7] ) ); #muertos_dia[wk*7:wk*7+7];wk*7;wk*7+7
             casos_week.append( np.sum( casos_dia[wk*7:wk*7+7] ) ); 
+            
+            muertos_week_suspect.append( np.sum( muertos_plus_suspect[wk*7:wk*7+7] ) ); #muertos_dia[wk*7:wk*7+7];wk*7;wk*7+7
+            casos_week_suspect.append( np.sum( casos_plus_suspect[wk*7:wk*7+7] ) ); 
+            
             historic_week.append( historic_days[wk*7] )
             if wk>0:                
                 muertos_week_mult.append(muertos_week[-1]/muertos_week[-2])
-                casos_week_mult.append(casos_week[-1]/casos_week[-2])
+                casos_week_mult.append(casos_week[-1]/casos_week[-2])  
+                
+                muertos_mult_suspect.append(muertos_week_suspect[-1]/muertos_week_suspect[-2])
+                casos_mult_suspect.append(casos_week_suspect[-1]/casos_week_suspect[-2])
+
+              
+                
         
         muertos_week_mult=utM.cleanMult(muertos_week_mult); casos_week_mult=utM.cleanMult(casos_week_mult)    
 
-        title="Casos (confirmados+sospechosos fecha de sìntomas/ingreso) weekly and multipliers historic"; fig = plt.figure(figsize=(10.0, 10.0));                
-        self.plotHistoricWeekly( fig, muertos_week, muertos_week_mult.tolist(), metric, historic_week, 2 )
-        self.plotHistoricWeekly( fig, casos_week, casos_week_mult.tolist(), metricCasos, historic_week, 1 )
+        title="Casos y muertos (confirmados+sospechosos) weekly and multipliers historic"; fig = plt.figure(figsize=(10.0, 10.0));                
+        self.plotHistoricWeekly( fig, casos_week, casos_week_mult, casos_week_suspect, casos_mult_suspect, metricCasos, historic_week, 1 )
+        
+        self.plotHistoricWeekly( fig, muertos_week, muertos_week_mult, muertos_week_suspect, muertos_mult_suspect, metric, historic_week, 2 )
+        fig.suptitle("{}\n {}".format(title, state) )
+
         
 #         fig.suptitle("{}\n {}".format(title, metricRangeStr) )
 #         fig.savefig(os.path.join(mobiVisuRes,title.replace(' ', '_')+".png"), bbox_inches='tight')
