@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 from operator import add
-
+import os
 import covidmx.utils_mult as utM
 
 class DGEMultipliers:
@@ -12,7 +12,6 @@ class DGEMultipliers:
     """
 
     def __init__(self, dge_data, catalogue, description):
-
         self.dge_data = self.prepare_data(dge_data)
         self.dge_data['cve_ent'] = self.dge_data['cve_ent'].astype(int).astype(str)
         self.catalogue = catalogue
@@ -22,10 +21,9 @@ class DGEMultipliers:
         state_geo = MapsMX().get_geo('state')
         state_geo['cve_ent'] = state_geo['cve_ent'].astype(int).astype(str)
 
-        mun_geo = MapsMX().get_geo('municipality')
+        mun_geo = MapsMX().get_geo('municipality', add_centroids=True)
         mun_geo[['cve_ent', 'cve_mun']] = mun_geo[['cve_ent', 'cve_mun']].astype(int).astype(str)
         mun_geo['cve_mun'] = mun_geo['cve_ent'] + '_' + mun_geo['cve_mun']
-
 
         self.state_geo = state_geo
         self.mun_geo = mun_geo
@@ -101,9 +99,24 @@ class DGEMultipliers:
     
     
 
-    def plotHistoric(self, state=None):
+    def plotHistoric(self, state=None, municipality=None, ploat_all=False):
         if state is not None: 
-            plot_data = self.dge_data[self.dge_data['entidad_res'].str.lower() == state.lower()]
+            plot_data = self.dge_data[ self.dge_data['entidad_res'].str.lower() == state.lower() ] #plot_data['municipio_res'].unique()
+            population=2000000
+            if municipality is not None:
+                plot_data = plot_data[ plot_data['municipio_res'].str.lower() == municipality.lower() ] #TODO: by pass bad namening
+                state=municipality+", "+state #plot_data.keys()# 
+                
+                municipiosPath = "/data/covid/maps/Mapa_de_grado_de_marginacion_por_municipio_2015/IMM_2015/IMM_2015centroids.csv"
+                with open(municipiosPath, 'r') as f:  #os.path.join(allMobi, timePoint) #print("{:02d}".format(day))
+                    muniDF = pd.read_csv( municipiosPath )
+                
+                cve_mun=plot_data["cve_mun"].unique()[0].split('_')
+                if len(cve_mun[1])<3: cve_mun[1]='0'+cve_mun[1]
+                if len(cve_mun[1])<3: cve_mun[1]='0'+cve_mun[1]
+                cve_mun=int( cve_mun[0]+cve_mun[1] )
+                population=muniDF[ muniDF["CVE_MUN"]==cve_mun ]["POB_TOT"].values[0]
+            
         else:
             plot_data = self.dge_data
             state="Nacional"
@@ -120,23 +133,23 @@ class DGEMultipliers:
         
         self.discardLatestDays=0;self.discardFirstDays=0; self.delayReportDays=14
         casos_dia, muertos_dia, casos_dia_ingreso, historic_days, casos_d_s, muertos_d_s, casos_d_s_ingreso = self.casesPerDayInRange( muertos_df, casos_df, muertos_sospechosos_df, sospechosos_df)
-
-        title="Muertes y casos (fecha de sìntomas/ingreso) daily historic" ;fig = plt.figure(figsize=(20.0, 15.0));
-        self.plotHistoricDaily(fig, muertos_dia, metric, historic_days, 311 )
-        self.plotHistoricDaily(fig, casos_dia, metricCasos, historic_days, 312 )
-        self.plotHistoricDaily(fig, casos_dia_ingreso, metricCasos+" ingreso", historic_days, 313 ) #TODO: verify symptoms start
-        fig.suptitle("{}\n {}".format(title, state) )
-#         fig.savefig(os.path.join(mobiVisuRes,title.replace(' ', '_')+".png"), bbox_inches='tight')            
-        
-        title="Muertes y casos (confirmados+sospechosos fecha de sìntomas/ingreso) daily historic" ; fig = plt.figure(figsize=(20.0, 15.0));
-        self.plotHistoricDaily(fig, list( map(add, muertos_dia, muertos_d_s) ), metric, historic_days, 311 )
-        self.plotHistoricDaily(fig, muertos_d_s, metric, historic_days, 311, line_color='ro-')        
-        self.plotHistoricDaily(fig, list( map(add, casos_dia, casos_d_s) ), metricCasos, historic_days, 312 )
-        self.plotHistoricDaily(fig, casos_d_s, metricCasos, historic_days, 312, line_color='ro-' )        
-        self.plotHistoricDaily(fig, list( map(add, casos_dia_ingreso, casos_d_s_ingreso) ), metricCasos+" ingreso", historic_days, 313 ) #TODO: verify symptoms start
-        self.plotHistoricDaily(fig, casos_d_s_ingreso, metricCasos+" ingreso", historic_days, 313, line_color='ro-' )        
-        fig.suptitle("{}\n {}".format(title, state) )
-#         fig.savefig(os.path.join(mobiVisuRes,title.replace(' ', '_')+".png"), bbox_inches='tight')
+        if ploat_all:
+            title="Muertes y casos (fecha de sìntomas/ingreso) daily historic" ;fig = plt.figure(figsize=(20.0, 15.0));
+            self.plotHistoricDaily(fig, muertos_dia, metric, historic_days, 311 )
+            self.plotHistoricDaily(fig, casos_dia, metricCasos, historic_days, 312 )
+            self.plotHistoricDaily(fig, casos_dia_ingreso, metricCasos+" ingreso", historic_days, 313 ) #TODO: verify symptoms start
+            fig.suptitle("{}\n {}".format(title, state) )
+    #         fig.savefig(os.path.join(mobiVisuRes,title.replace(' ', '_')+".png"), bbox_inches='tight')            
+            
+            title="Muertes y casos (confirmados+sospechosos fecha de sìntomas/ingreso) daily historic" ; fig = plt.figure(figsize=(20.0, 15.0));
+            self.plotHistoricDaily(fig, list( map(add, muertos_dia, muertos_d_s) ), metric, historic_days, 311 )
+            self.plotHistoricDaily(fig, muertos_d_s, metric, historic_days, 311, line_color='ro-')        
+            self.plotHistoricDaily(fig, list( map(add, casos_dia, casos_d_s) ), metricCasos, historic_days, 312 )
+            self.plotHistoricDaily(fig, casos_d_s, metricCasos, historic_days, 312, line_color='ro-' )        
+            self.plotHistoricDaily(fig, list( map(add, casos_dia_ingreso, casos_d_s_ingreso) ), metricCasos+" ingreso", historic_days, 313 ) #TODO: verify symptoms start
+            self.plotHistoricDaily(fig, casos_d_s_ingreso, metricCasos+" ingreso", historic_days, 313, line_color='ro-' )        
+            fig.suptitle("{}\n {}".format(title, state) )
+    #         fig.savefig(os.path.join(mobiVisuRes,title.replace(' ', '_')+".png"), bbox_inches='tight')
         
         self.discardFirstDays=17
         casos_dia, muertos_dia, casos_dia_ingreso, historic_days, casos_d_s, muertos_d_s, casos_d_s_ingreso = self.casesPerDayInRange( muertos_df, casos_df, muertos_sospechosos_df, sospechosos_df)
@@ -148,19 +161,19 @@ class DGEMultipliers:
 #             historic_days.append( '{}/{}'.format(day.date().day,day.date().month) )
         
         muertos_plus_suspect = list( map(add, muertos_dia, muertos_d_s) )
-        title="Muertes (confirmados+sospechosos fecha de sìntomas/ingreso) daily historic"; fig = plt.figure(figsize=(20.0, 15.0));  
-        self.plotHistoricDaily(fig, muertos_dia, metric, historic_days, 111, log_scale=False )
-        self.plotHistoricDaily(fig, muertos_plus_suspect, metric, historic_days, 111, line_color='ro-', log_scale=False)
-        fig.suptitle("{}\n {}".format(title, state) )
-        
         casos_plus_suspect=list( map(add, casos_dia, casos_d_s) )
-        title="Casos (confirmados+sospechosos fecha de sìntomas/ingreso) daily historic"; fig = plt.figure(figsize=(20.0, 15.0));  
-        self.plotHistoricDaily(fig, casos_dia, metricCasos, historic_days, 111, log_scale=False )
-        self.plotHistoricDaily(fig, casos_plus_suspect, metricCasos, historic_days, 111, line_color='ro-', log_scale=False)        
-#         self.plotHistoricDaily(fig, list( map(add, casos_dia_ingreso, casos_d_s_ingreso) ), metricCasos+" ingreso", historic_days, 313 ) #TODO: verify symptoms start
-#         self.plotHistoricDaily(fig, casos_d_s_ingreso, metricCasos+" ingreso", historic_days, 313, line_color='ro-' )
-        fig.suptitle("{}\n {}".format(title, state) )
-        
+        if ploat_all:
+            title="Muertes (confirmados+sospechosos fecha de sìntomas/ingreso) daily historic"; fig = plt.figure(figsize=(20.0, 15.0));  
+            self.plotHistoricDaily(fig, muertos_dia, metric, historic_days, 111, log_scale=False )
+            self.plotHistoricDaily(fig, muertos_plus_suspect, metric, historic_days, 111, line_color='ro-', log_scale=False)
+            fig.suptitle("{}\n {}".format(title, state) )
+            
+            title="Casos (confirmados+sospechosos fecha de sìntomas/ingreso) daily historic"; fig = plt.figure(figsize=(20.0, 15.0));  
+            self.plotHistoricDaily(fig, casos_dia, metricCasos, historic_days, 111, log_scale=False )
+            self.plotHistoricDaily(fig, casos_plus_suspect, metricCasos, historic_days, 111, line_color='ro-', log_scale=False)        
+    #         self.plotHistoricDaily(fig, list( map(add, casos_dia_ingreso, casos_d_s_ingreso) ), metricCasos+" ingreso", historic_days, 313 ) #TODO: verify symptoms start
+    #         self.plotHistoricDaily(fig, casos_d_s_ingreso, metricCasos+" ingreso", historic_days, 313, line_color='ro-' )
+            fig.suptitle("{}\n {}".format(title, state) )
         
         historic_week=[]; muertos_week=[];  muertos_week_mult=[0]; casos_week=[];  casos_week_mult=[0];
         muertos_week_suspect=[];  muertos_mult_suspect=[0]; casos_week_suspect=[];  casos_mult_suspect=[0];
@@ -179,22 +192,20 @@ class DGEMultipliers:
                 muertos_mult_suspect.append(muertos_week_suspect[-1]/muertos_week_suspect[-2])
                 casos_mult_suspect.append(casos_week_suspect[-1]/casos_week_suspect[-2])
 
-              
-                
-        
         muertos_week_mult=utM.cleanMult(muertos_week_mult); casos_week_mult=utM.cleanMult(casos_week_mult)    
-
-        title="Casos y muertos (confirmados+sospechosos) weekly and multipliers historic"; fig = plt.figure(figsize=(10.0, 10.0));                
-        self.plotHistoricWeekly( fig, casos_week, casos_week_mult, casos_week_suspect, casos_mult_suspect, metricCasos, historic_week, 1 )
         
+        casosT=np.sum(casos_week_suspect); muertosT=np.sum(muertos_week_suspect);casosAct=np.sum(casos_week[-3:]); casosActSusp=np.sum(casos_week_suspect[-3:])
+        casosActInci=casosAct*100000.0/population; casosActSuspInci=casosActSusp*100000.0/population
+        title="Casos {} ({}) y muertos {} ({}) (confirmados+sospechosos)".format(np.sum(casos_week), casosT, np.sum(muertos_week), muertosT ); 
+        title2="\nCasos activos last 3weeks {} ({}) Incidencia {:.2f} ({:.2f}) casos/100k ".format(casosAct, casosActSusp, casosActInci, casosActSuspInci); 
+        fig = plt.figure(figsize=(10.0, 10.0));                
+        self.plotHistoricWeekly( fig, casos_week, casos_week_mult, casos_week_suspect, casos_mult_suspect, metricCasos, historic_week, 1 )        
         self.plotHistoricWeekly( fig, muertos_week, muertos_week_mult, muertos_week_suspect, muertos_mult_suspect, metric, historic_week, 2 )
-        fig.suptitle("{}\n {}".format(title, state) )
+        casosInci=casosT*100000.0/population; muertosInci=muertosT*100000.0/population
+        fig.suptitle("{}\nIncidencia {:.2f} casos/100k  y {:.2f} muertos/100k  Pob{} {}\n{} weekly and multipliers".format(title, casosInci, muertosInci, population, title2, state) )
 
-        
 #         fig.suptitle("{}\n {}".format(title, metricRangeStr) )
-#         fig.savefig(os.path.join(mobiVisuRes,title.replace(' ', '_')+".png"), bbox_inches='tight')
-        
-        
+        fig.savefig(os.path.join("/data/covid/fer",state.replace(", ","_")+".png"), bbox_inches='tight')
 
     def prepare_data(self, df):
 
@@ -221,7 +232,7 @@ class DGEMultipliers:
 
     def plot_map(self, status='confirmados', state=None,
                  add_municipalities=False, save_file_name = None,
-                 cmap='Reds',
+                 cmap="viridis", #'Reds'
                  scheme='quantiles', k=4, legend=True, zorder=1,
                  missing_kwds={'color': 'lightgray', 'label': 'Sin info'}, **kwargs):
         """
@@ -284,6 +295,12 @@ class DGEMultipliers:
             mun_geo_plot.boundary.plot(ax=base, color=None,
                                        edgecolor='black',
                                        linewidth=0.2)
+
+
+
+
+        for idx, row in mun_geo_plot.iterrows():
+            plt.annotate(s=row['nom_mun'][:6], xy=row['centroid_mun'].coords[0], horizontalalignment='center', fontsize=7, color='r')
 
         plot_obj = plot_data.set_geometry(geometry).plot(ax=base,
                                                          column=status,
