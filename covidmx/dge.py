@@ -8,7 +8,7 @@ from covidmx.utils import translate_serendipia
 from covidmx.dge_plot import DGEPlot
 import pickle
 
-from covidmx.dge_multipliers import DGEMultipliers
+from covidmx.dge_epidemic_curves import DGEEpidemicCurves
 
 pd.options.mode.chained_assignment = None
 
@@ -260,14 +260,14 @@ class DGE:
 
         return dge_plot
     
-    def get_multipliers(self):
+    def get_epidemic_curves(self):
         self.return_catalogo = True
         self.return_descripcion = True
         self.clean = True
 
         dge_data, catalogue, description = self.get_data(preserve_original=['MUNICIPIO_RES', 'ENTIDAD_RES'])
 
-        dge_multi = DGEMultipliers(dge_data, catalogue, description)
+        dge_multi = DGEEpidemicCurves(dge_data, catalogue, description)
         dge_multi.date = self.date
         dge_multi.stringency_dates = self.stringency_dates
 

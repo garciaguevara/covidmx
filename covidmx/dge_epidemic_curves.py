@@ -6,37 +6,13 @@ from operator import add
 import os
 import covidmx.utils_mult as utM
 from numpy.core.arrayprint import _line_width
+import covidmx.dge_plot as dgePlt
 
-class DGEMultipliers:
+
+class DGEEpidemicCurves(dgePlt.DGEBase):
     """
     Class to plot weekly multipliers dge information
     """
-
-    def __init__(self, dge_data, catalogue, description):
-        self.dge_data = self.prepare_data(dge_data)
-        self.dge_data['cve_ent'] = self.dge_data['cve_ent'].astype(int).astype(str)
-        self.catalogue = catalogue
-        self.description = description
-
-        #Downloading geo information
-        state_geo = MapsMX().get_geo('state')
-        state_geo['cve_ent'] = state_geo['cve_ent'].astype(int).astype(str)
-
-        mun_geo = MapsMX().get_geo('municipality', add_centroids=True)
-        mun_geo[['cve_ent', 'cve_mun']] = mun_geo[['cve_ent', 'cve_mun']].astype(int).astype(str)
-        mun_geo['cve_mun'] = mun_geo['cve_ent'] + '_' + mun_geo['cve_mun']
-
-        self.state_geo = state_geo
-        self.mun_geo = mun_geo
-        self.available_states = self.dge_data['entidad_res'].unique()
-        self.available_status = ['confirmados', 'negativos', 'sospechosos', 'muertos']
-        
-        municipiosPath = "/data/covid/maps/Mapa_de_grado_de_marginacion_por_municipio_2015/IMM_2015/IMM_2015centroids.csv"
-        with open(municipiosPath, 'r') as f:  #os.path.join(allMobi, timePoint) #print("{:02d}".format(day))
-            self.muniDF = pd.read_csv( municipiosPath )
-        
-
-
 
     def plotStringencyDates(self, weekly=True):
         susy=self.stringency_dates["susana"]-self.dias_confirmados[self.discardFirstDays]
@@ -50,14 +26,16 @@ class DGEMultipliers:
             plt.axvline(x=nueva_norm.days,  linewidth=4, c=(1, 0.65, 0,0.5))    
         return susy, nueva_norm
 
-    def plotHistoricDaily(self, fig, per_day, metric, historic_days, plot_position, line_color='bo-', line_width=0.9, log_scale=True ):        
+    def plotHistoricDaily(self, fig, per_day, metric, historic_days, plot_position, line_color='bo-', line_width=0.4, log_scale=True ):        
         xAxis=[x for x in range(len(historic_days))]
         ax = fig.add_subplot(plot_position);
         _=plt.xticks(xAxis, historic_days , rotation='vertical');ax.grid('on')#plt.grid();#plt.show()#[x[0][8:13] for x in historic_days]
         if log_scale: ax.set_yscale('log'); 
         ax.yaxis.grid(b=True, which='both', linestyle='--')
-        ax.plot( xAxis,per_day, line_color, label="{} por dìa".format(metric), linewidth=line_width, markersize=line_width*4.5 );
-        ax.set_ylabel(r"{} nùmero".format(metric)); ax.legend(fontsize="small") #, loc=6
+        if metric == '':lMetric=""
+        else: lMetric="{} por dìa".format(metric)
+        ax.plot( xAxis,per_day, line_color, label=lMetric, linewidth=line_width, markersize=line_width*4.5 );
+        ax.set_ylabel(r"nùmero {}".format(metric)); ax.legend(fontsize="small") #, loc=6
         
         susy, _= self.plotStringencyDates( weekly=False)
         for ith_monday in range((susy.days)%7,len(xAxis),7):
@@ -72,7 +50,7 @@ class DGEMultipliers:
         ax.yaxis.grid(b=True, which='minor', linestyle='--'); #ax.set_yscale('log'); 
         ax.plot(xAxis,muertos_week,'o-', label="{} per week".format(metric) );
         
-        ax.plot(xAxis,muertos_week_suspect,'ro-', label="{} + sospechosos per week".format(metric) );
+        ax.plot(xAxis,muertos_week_suspect,'mo-', label="{} + sospechosos per week".format(metric) );
         
         ax.set_ylabel(r"{} number".format(metric)); ax.legend(fontsize="small")#, loc=6
         self.plotStringencyDates()
@@ -80,7 +58,7 @@ class DGEMultipliers:
         ax2 = fig.add_subplot(222+plot_position);#ax2 = ax.twinx(); 
         _=plt.xticks(xAxis, historic_week , rotation='vertical');ax2.grid('on');
         ax2.plot(xAxis,multipliers,'^-', label="Multipliers")
-        ax2.plot(xAxis,muertos_mult_suspect,'r^-', label="Multipliers + sospechosos")
+        ax2.plot(xAxis,muertos_mult_suspect,'m^-', label="Multipliers + sospechosos")
         ax2.yaxis.grid(b=True, which='minor', linestyle='--'); ax2.set_ylim((0,2.0))# plt.ylim(4.0)
         ax2.set_ylabel(r"{} multiplier".format(metric)); ax2.legend(fontsize="small");ax.grid('on') #, loc=5
         
@@ -176,26 +154,26 @@ class DGEMultipliers:
         if ploat_all:
             historic_days=historic_d[0]
             title="Muertes (confirmados+sospechosos) daily historic"; fig = plt.figure(figsize=(20.0, 15.0));  
-            muertos_dia_ma = utM.smooth(np.array(muertos_dia), window_len=7).tolist()[3:-3] # 
+            muertos_dia_ma = utM.smooth(np.array(muertos_dia), window_len=7).tolist()[3:-3]; metricSmooth="" # 
 #             muertos_dia_ma2 = utM.smooth(np.array(muertos_dia), window_len=7).tolist()
 #             muertos_dia_ma = muertos_dia[:3]+np.convolve(muertos_dia, np.ones((7,))/7, mode='valid').tolist()+muertos_dia[-3
             self.plotHistoricDaily(fig, muertos_dia, metric, historic_days, 111, log_scale=False )            
-            self.plotHistoricDaily(fig, muertos_dia_ma, metric, historic_days, 111, line_color='g-',log_scale=False )
+            self.plotHistoricDaily(fig, muertos_dia_ma, metricSmooth, historic_days, 111, line_color='b-',log_scale=False , line_width=1.2)
 
             muertos_plus_suspect_ma = utM.smooth(np.array(muertos_plus_suspect), window_len=7).tolist()[3:-3] #            
             self.plotHistoricDaily(fig, muertos_plus_suspect, metric+" (confirmados+sospechosos)", historic_days, 111, line_color='mo-', log_scale=False)
-            self.plotHistoricDaily(fig, muertos_plus_suspect_ma, metric, historic_days, 111, line_color='g-',log_scale=False )
+            self.plotHistoricDaily(fig, muertos_plus_suspect_ma, metricSmooth, historic_days, 111, line_color='m-',log_scale=False, line_width=1.2 )
             fig.suptitle("{}\n {}".format(title, state) )            
             
             title="Casos (confirmados+sospechosos fecha de sìntomas/ingreso) daily historic"; fig = plt.figure(figsize=(20.0, 15.0));  
             
             casos_dia_ma = utM.smooth(np.array(casos_dia), window_len=7, window='flat').tolist()[3:-3] #
             self.plotHistoricDaily(fig, casos_dia, metricCasos, historic_days, 111, log_scale=False )
-            self.plotHistoricDaily(fig, casos_dia_ma, metric, historic_days, 111, line_color='g-',log_scale=False )
+            self.plotHistoricDaily(fig, casos_dia_ma, metricSmooth, historic_days, 111, line_color='b-',log_scale=False, line_width=1.2 )
             
             casos_plus_suspect_ma = utM.smooth(np.array(casos_plus_suspect), window_len=7, window='flat').tolist()[3:-3] #            
             self.plotHistoricDaily(fig, casos_plus_suspect, metricCasos+" (confirmados+sospechosos)", historic_days, 111, line_color='mo-', log_scale=False)        
-            self.plotHistoricDaily(fig, casos_plus_suspect_ma, metric, historic_days, 111, line_color='g-',log_scale=False )
+            self.plotHistoricDaily(fig, casos_plus_suspect_ma, metricSmooth, historic_days, 111, line_color='m-',log_scale=False, line_width=1.2 )
             
     #         self.plotHistoricDaily(fig, list( map(add, casos_dia_ingreso, casos_d_s_ingreso) ), metricCasos+" ingreso", historic_days, 313 ) #TODO: verify symptoms start
     #         self.plotHistoricDaily(fig, casos_d_s_ingreso, metricCasos+" ingreso", historic_days, 313, line_color='ro-' )
@@ -233,146 +211,3 @@ class DGEMultipliers:
 #         fig.suptitle("{}\n {}".format(title, metricRangeStr) )
         fig.savefig(os.path.join("/data/covid/fer",state.replace(", ","_")+".png"), bbox_inches='tight')
 
-    def prepare_data(self, df):
-
-        df = df.rename(columns={
-                       'entidad_res_original': 'cve_ent',
-                       'municipio_res_original': 'cve_mun'
-                       })
-        
-        df['muertos'] = df['fecha_def'].notna().astype(int)
-
-        replace_resultado = {'Positivo SARS-CoV-2': 'confirmados',
-                             'No positivo SARS-CoV-2': 'negativos',
-                             'Resultado pendiente':'sospechosos'}
-
-        df['resultado'] = df['resultado'].replace(replace_resultado)
-        df = pd.concat([df, pd.get_dummies(df['resultado'])], axis=1)
-
-        int_vars = list(replace_resultado.values()) + ['muertos']
-        df[int_vars] = df[int_vars].astype(int) #19764 09-07 
-        
-#         self.plotHistoric(df)
-
-        return df
-
-    def plot_map(self, status='confirmados', state=None,
-                 add_municipalities=False, save_file_name = None,
-                 cmap="viridis", #'Reds'
-                 scheme='quantiles', k=4, legend=True, zorder=1,
-                 missing_kwds={'color': 'lightgray', 'label': 'Sin info'}, incidence=True, **kwargs):
-        """
-        Plot geography information
-
-        Parameters
-        ----------
-        status: str
-            One of confirmados, sospechosos, negativos, muertos
-        state: str
-            Plot particular state.
-        add_municipalities: bool
-            Wheter add municipalities to plot
-        """
-
-        assert status in self.available_status, 'Please provide some of the following status: {}'.format(', '.join(self.available_status))
-        if state is not None:
-            assert state in self.available_states, 'Please provide some of the following states: {}'.format(', '.join(self.available_states))
-
-        # if last_date_to_consider is not None:
-        #     last_date = pd.to_datetime(last_date_to_consider, format=format_date)
-        #     plot_data = self.dge_data[self.dge_data['fecha_sintomas']<=last_date]
-        # else:
-        #     plot_data = self.dge_data
-
-        group_cols = ['entidad_res', 'cve_ent']
-
-        if add_municipalities:
-            group_cols += ['municipio_res', 'cve_mun']
-
-        needed_cols = [status] + group_cols
-        plot_data = self.dge_data[needed_cols]
-        state_geo_plot = self.state_geo
-        mun_geo_plot = self.mun_geo
-
-        if state is not None:
-            plot_data = plot_data[plot_data['entidad_res'].str.lower() == state.lower()]
-            cve_ent = str(plot_data['cve_ent'].unique()[0])
-            state_geo_plot = self.state_geo[self.state_geo['cve_ent']==cve_ent]
-            mun_geo_plot = self.mun_geo[self.mun_geo['cve_ent']==cve_ent]
-
-        plot_data = plot_data.groupby(group_cols).agg(sum).reset_index()
-
-        if add_municipalities:
-            plot_data = plot_data.drop(columns='cve_ent')
-            plot_data = mun_geo_plot.merge(plot_data, how='left', on='cve_mun')
-            geometry = 'geometry_mun'
-            
-            if incidence:
-                munis_state=self.muniDF[ self.muniDF["NOM_ENT"].str.lower()==state.lower() ]
-                munis_state = munis_state.rename({'CVE_MUN': 'cve_geo_mun'}, axis='columns')                
-#                 plot_data["cve_geo_mun"] = plot_data.to_numeric(plot_data["cve_geo_mun"]);                plot_data = plot_data.convert_objects(convert_numeric=True)
-                munis_state['cve_geo_mun'] = munis_state['cve_geo_mun'].apply(str)                
-                plot_data = munis_state.merge(plot_data, how='right', on='cve_geo_mun')
-                plot_data[status+' incidencia'] = plot_data[status]*100000.0/plot_data['POB_TOT']
-                status=status+' incidencia'
-                
-            
-        else:
-            plot_data = state_geo_plot.merge(plot_data, how='left', on='cve_ent')
-            geometry = 'geometry_ent'
-
-        base = state_geo_plot.boundary.plot(color=None,
-                                            edgecolor='black',
-                                            linewidth=0.6,
-                                            figsize=(10,9))
-
-        if add_municipalities and state is not None:
-            mun_geo_plot.boundary.plot(ax=base, color=None,
-                                       edgecolor='black',
-                                       linewidth=0.2)
-
-        for idx, row in mun_geo_plot.iterrows():
-            plt.annotate(s=row['nom_mun'][:6], xy=row['centroid_mun'].coords[0], horizontalalignment='center', fontsize=7, color='r')
-
-        plot_obj = plot_data.set_geometry(geometry).plot(ax=base,
-                                                         column=status,
-                                                         cmap=cmap,
-                                                         scheme=scheme,
-                                                         k=k,
-                                                         legend=legend,
-                                                         zorder=zorder,
-                                                         missing_kwds=missing_kwds,
-                                                         **kwargs)
-        base.set_axis_off()
-        plt.axis('equal')
-        if incidence:status=status+' por 100k'
-        title = 'Casos ' + status + ' por COVID-19'
-
-        if state is not None:
-            title += '\n'
-            title += state.title()
-
-        act_date = self.date
-        if self.date is None:
-            act_date = self.dge_data['fecha_actualizacion'][0]
-        act_date = act_date.date()
-        act_date = str(act_date)
-
-        title += '\n'
-        title += 'Fecha de actualizacion de los datos: {}'.format(act_date)
-
-
-        plt.title(title, fontsize=20)
-
-
-        if save_file_name is not None:
-            plt.savefig(save_file_name, bbox_inches='tight', pad_inches=0)
-            plt.close()
-        else:
-            plt.show()
-
-
-
-
-
-        return plot_obj
