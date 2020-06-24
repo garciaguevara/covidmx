@@ -30,6 +30,11 @@ class DGEMultipliers:
         self.mun_geo = mun_geo
         self.available_states = self.dge_data['entidad_res'].unique()
         self.available_status = ['confirmados', 'negativos', 'sospechosos', 'muertos']
+        
+        municipiosPath = "/data/covid/maps/Mapa_de_grado_de_marginacion_por_municipio_2015/IMM_2015/IMM_2015centroids.csv"
+        with open(municipiosPath, 'r') as f:  #os.path.join(allMobi, timePoint) #print("{:02d}".format(day))
+            self.muniDF = pd.read_csv( municipiosPath )
+        
 
 
 
@@ -105,14 +110,10 @@ class DGEMultipliers:
     
 
     def plotHistoric(self, state=None, municipality=None, ploat_all=False):
-        municipiosPath = "/data/covid/maps/Mapa_de_grado_de_marginacion_por_municipio_2015/IMM_2015/IMM_2015centroids.csv"
-        with open(municipiosPath, 'r') as f:  #os.path.join(allMobi, timePoint) #print("{:02d}".format(day))
-            muniDF = pd.read_csv( municipiosPath )
-        
         if state is not None: 
             plot_data = self.dge_data[ self.dge_data['entidad_res'].str.lower() == state.lower() ] #plot_data['municipio_res'].unique()
             
-            population=muniDF[ muniDF["NOM_ENT"].str.lower()==state.lower() ]["POB_TOT"].sum()
+            population=self.muniDF[ self.muniDF["NOM_ENT"].str.lower()==state.lower() ]["POB_TOT"].sum()
             if municipality is not None:
 #                 plot_data['municipio_res'].unique() #TODO: by pass bad namening find more similar municipality.lower(), verify length ofunique municipalities
                 plot_data = plot_data[ plot_data['municipio_res'].str.lower() == municipality.lower() ] 
@@ -122,12 +123,12 @@ class DGEMultipliers:
                 if len(cve_mun[1])<3: cve_mun[1]='0'+cve_mun[1]
                 if len(cve_mun[1])<3: cve_mun[1]='0'+cve_mun[1]
                 cve_mun=int( cve_mun[0]+cve_mun[1] )
-                population=muniDF[ muniDF["CVE_MUN"]==cve_mun ]["POB_TOT"].values[0]
+                population=self.muniDF[ self.muniDF["CVE_MUN"]==cve_mun ]["POB_TOT"].values[0]
             
         else:
             plot_data = self.dge_data
             state="Nacional"
-            population=muniDF["POB_TOT"].sum()
+            population=self.muniDF["POB_TOT"].sum()
             
         metric="muertos"; metricCasos="casos"
         casos_df=plot_data[ plot_data['resultado']=='confirmados' ];         
@@ -259,7 +260,7 @@ class DGEMultipliers:
                  add_municipalities=False, save_file_name = None,
                  cmap="viridis", #'Reds'
                  scheme='quantiles', k=4, legend=True, zorder=1,
-                 missing_kwds={'color': 'lightgray', 'label': 'Sin info'}, **kwargs):
+                 missing_kwds={'color': 'lightgray', 'label': 'Sin info'}, incidence=True, **kwargs):
         """
         Plot geography information
 
@@ -289,7 +290,6 @@ class DGEMultipliers:
             group_cols += ['municipio_res', 'cve_mun']
 
         needed_cols = [status] + group_cols
-
         plot_data = self.dge_data[needed_cols]
         state_geo_plot = self.state_geo
         mun_geo_plot = self.mun_geo
@@ -305,8 +305,18 @@ class DGEMultipliers:
         if add_municipalities:
             plot_data = plot_data.drop(columns='cve_ent')
             plot_data = mun_geo_plot.merge(plot_data, how='left', on='cve_mun')
-
             geometry = 'geometry_mun'
+            
+            if incidence:
+                munis_state=self.muniDF[ self.muniDF["NOM_ENT"].str.lower()==state.lower() ]
+                munis_state = munis_state.rename({'CVE_MUN': 'cve_geo_mun'}, axis='columns')                
+#                 plot_data["cve_geo_mun"] = plot_data.to_numeric(plot_data["cve_geo_mun"]);                plot_data = plot_data.convert_objects(convert_numeric=True)
+                munis_state['cve_geo_mun'] = munis_state['cve_geo_mun'].apply(str)                
+                plot_data = munis_state.merge(plot_data, how='right', on='cve_geo_mun')
+                plot_data[status+' incidencia'] = plot_data[status]*100000.0/plot_data['POB_TOT']
+                status=status+' incidencia'
+                
+            
         else:
             plot_data = state_geo_plot.merge(plot_data, how='left', on='cve_ent')
             geometry = 'geometry_ent'
@@ -320,9 +330,6 @@ class DGEMultipliers:
             mun_geo_plot.boundary.plot(ax=base, color=None,
                                        edgecolor='black',
                                        linewidth=0.2)
-
-
-
 
         for idx, row in mun_geo_plot.iterrows():
             plt.annotate(s=row['nom_mun'][:6], xy=row['centroid_mun'].coords[0], horizontalalignment='center', fontsize=7, color='r')
@@ -338,7 +345,7 @@ class DGEMultipliers:
                                                          **kwargs)
         base.set_axis_off()
         plt.axis('equal')
-
+        if incidence:status=status+' por 100k'
         title = 'Casos ' + status + ' por COVID-19'
 
         if state is not None:
